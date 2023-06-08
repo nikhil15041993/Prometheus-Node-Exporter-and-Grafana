@@ -27,16 +27,10 @@ Prometheus supports two types of rules which may be configured and then evaluate
 prometheus.rules.yml
 ```
 groups:
-- name: Hardware alerts
-  rules:
-  - alert: Node down
-    expr: up{job="node_exporter"} == 0
-    for: 3m
-    labels:
-      severity: warning
-    annotations:
-      title: Node {{ $labels.instance }} is down
-      description: Failed to scrape {{ $labels.job }} on {{ $labels.instance }} for more than 3 minutes. Node seems down.
+  - name: custom_rules
+    rules:
+      - record: node_memory_MemFree_percent
+        expr: 100 - (100 * node_memory_MemFree_bytes / node_memory_MemTotal_bytes)
 ``` 
 * Step 2 – Now lets add the prometheus_rules.yml reference to the prometheus.yml rule_files section.
 * Step 3 – and restart the prometheus service.
@@ -46,6 +40,64 @@ How to check rules config file?
 ```
 promtool check rules /etc/prometheus/prometheus.rules.yml
 ```
-     
+ 
+## AlertManager
+First, we need to download the latest binary of AlertManager.
+
+```
+
+sudo su
+cd /opt/
+wget https://github.com/prometheus/alertmanager/releases/download/v0.11.0/alertmanager-0.11.0.linux-amd64.tar.gz
+tar -xvzf alertmanager-0.11.0.linux-amd64.tar.gz
+mv alertmanager-0.11.0.linux-amd64/alertmanager /usr/local/bin/
+```
+
+AlertManager Configuration
+
+The AlertManager uses a configuration file named alertmanager.ymlThis file is contained in the extracted directory. However, it is not of our use. That’s why we need to create our own alertmanager.yml
+
+```
+
+mkdir /etc/alertmanager/
+sudo nano /etc/alertmanager/alertmanager.yml
+```
+```
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 10s
+  receiver: 'email'
+receivers:
+- name: 'email'
+  email_configs:
+  - to: 'receiver_mail_id@gmail.com'
+    from: 'mail_id@gmail.com'
+    smarthost: smtp.gmail.com:587
+    auth_username: 'mail_id@gmail.com'
+    auth_identity: 'mail_id@gmail.com'
+    auth_password: 'password'
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
+ ```
+ 
+ Still, the Alertmanager isn’t added to our Prometheus, we need to update our prometheus.yml file by adding the location of our Alertmanager.
+ 
+ ```
+ alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      - localhost:9093
+```      
+ 
 
 
